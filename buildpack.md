@@ -101,8 +101,8 @@ Executable: `/bin/build <platform[AR]> <cache[EC]> <launch[EI]>`, Working Dir: `
 | `<cache>/<layer>/pkgconfig/`  | Search path for pkg-config
 | `<cache>/<layer>/env/`        | Env vars for subsequent buildpacks
 | `<cache>/<layer>/*`           | Other cached content
-| `<launch>/launch.toml`        | Launch metadata (see File: launch.toml)
-| `<launch>/<layer>.toml`       | Layer content metadata (see Layer Caching)
+| `<launch>/launch.toml`        | Launch metadata (see [launch.toml](#launch.toml-(toml)))
+| `<launch>/<layer>.toml`       | Layer content metadata
 | `<launch>/<layer>/bin/`       | Binaries for launch
 | `<launch>/<layer>/lib/`       | Shared libraries for launch
 | `<launch>/<layer>/profile.d/` | Scripts sourced by bash before launch
@@ -123,7 +123,7 @@ Executable: `/bin/develop <platform[A]> <cache[EC]>`, Working Dir: `<app[A]>`
 | [exit status]                | Success (0) or failure (1+)
 | `/dev/stdout`                | Logs (info)
 | `/dev/stderr`                | Logs (warnings, errors)
-| `<cache>/develop.toml`       | Development metadata (see File: develop.toml)
+| `<cache>/develop.toml`       | Development metadata (see [develop.toml](#develop.toml-(toml)))
 | `<cache>/<layer>/bin/`       | Binaries for subsequent buildpacks & app
 | `<cache>/<layer>/lib/`       | Libraries for subsequent buildpacks & app
 | `<cache>/<layer>/include/`   | C/C++ headers for subsequent buildpacks
@@ -188,8 +188,9 @@ The final Build Plan is the complete combined map that includes the output of th
 The lifecycle MAY execute each `/bin/detect` within a group in parallel.
 Therefore, reading from `stdin` in `/bin/detect` MUST block until the previous `/bin/detect` in the group closes `stdout`.
 
-The lifecycle MUST run `/bin/detect` for all buildpacks in a group on a common stack.
+The lifecycle MUST run `/bin/detect` for all buildpacks in a group in a container using common stack with a common set of mixins.
 The lifecycle MUST fail detection if any of those buildpacks does not list that stack in `buildpack.toml`.
+The lifecycle MUST fail detection if any of those buildpacks specifies a mixin associated with that stack in `buildpack.toml` that is unavailable in the container.
 
 ## Phase #2: Analysis
 
@@ -318,7 +319,7 @@ The purpose of export is to create an new OCI image using a combination of remot
 - The `<launch>` directories provided to each buildpack during the build phase,
 - The `<app>` directory processed by the buildpacks during the build phase,
 - The buildpack IDs associated with the buildpacks used during the build phase, in order of execution,
-- A reference to the most recent version of the run image associated with the stack,
+- A reference to the most recent version of the run image associated with the stack and mixins,
 - A reference to the old OCI image associated with the `<launch>/<layer>.toml` files that were retrieved during the analysis phase, and
 - A tag for a new OCI image,
 
@@ -501,7 +502,7 @@ The following additional environment variables MUST NOT be overridden by the lif
 |-----------------|----------------------------------------|--------|-------|--------
 | `PACK_STACK_ID` | Chosen stack ID                        | [x]    | [x]   |
 | `BP_*`          | User-specified variable for buildpack  | [x]    | [x]   |
-| `BPL_*`		  | User-specified variable for profile.d  |        |       | [x]
+| `BPL_*`		   | User-specified variable for profile.d  |        |       | [x]
 | `HOME`          | Current user's home directory          | [x]    | [x]   | [x]
 
 The lifecycle MUST provide any user-provided environment variables as files in `<platform>/env/` with file names and contents matching the environment variable names and contents.
@@ -586,6 +587,7 @@ version = "<buildpack version>"
 
 [[stacks]]
 id = "<stack ID>"
+mixins = ["<mixin name>"]
 build-images = ["<build image tag>"]
 run-images = ["<run image tag>"]
 
@@ -606,7 +608,7 @@ The stack ID:
 - MUST only contain numbers, letters, and the charactors `.`, `/`, and `-`.
 - MUST NOT be identical to any other stack ID when using a case-insensitive comparison.
 
-The stack `build-images` and `run-images` are suggested sources of the image for platforms that are unaware of the stack ID.
+The stack `build-images` and `run-images` are suggested sources of images for platforms that are unaware of the stack ID. Buildpack authors MUST ensure that these images include all mixins specified in `mixins`.
 
 ### launch.toml (TOML)
 
